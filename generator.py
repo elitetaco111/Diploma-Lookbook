@@ -50,8 +50,8 @@ CANDIDATES = {
         "team lookbook",
     ],
     "name": ["name", "product name", "sku name"],
-    # Accept either "Silhouette" or "Store Display Name"
-    "silhouette": ["silhouette", "store display name"],
+    # Use only "Store Display Name"
+    "display_name": ["store display name"],
     "price": ["original price", "price", "msrp", "list price"],
 }
 
@@ -79,7 +79,7 @@ def find_column(headers: List[str], keys: List[str], contains_all: Optional[List
 def resolve_columns(headers: List[str]) -> Dict[str, str]:
     team_col = find_column(headers, CANDIDATES["team"], contains_all=["team", "league", "lookbook"])
     name_col = find_column(headers, CANDIDATES["name"])
-    silhouette_col = find_column(headers, CANDIDATES["silhouette"])
+    display_name_col = find_column(headers, CANDIDATES["display_name"])
     price_col = find_column(headers, CANDIDATES["price"])
 
     missing = []
@@ -87,8 +87,8 @@ def resolve_columns(headers: List[str]) -> Dict[str, str]:
         missing.append("Team League Data - lookbook")
     if not name_col:
         missing.append("Name")
-    if not silhouette_col:
-        missing.append("Silhouette")
+    if not display_name_col:
+        missing.append("Store Display Name")
     if not price_col:
         missing.append("Original Price")
 
@@ -102,7 +102,7 @@ def resolve_columns(headers: List[str]) -> Dict[str, str]:
     return {
         "team": team_col,
         "name": name_col,
-        "silhouette": silhouette_col,
+        "display_name": display_name_col,
         "price": price_col,
     }
 
@@ -119,7 +119,7 @@ def sanitize_filename(name: str) -> str:
 class ItemRow:
     team: str
     name: str
-    silhouette: str
+    display_name: str
     price: str
 
 
@@ -137,19 +137,19 @@ def load_rows(csv_path: Path) -> Tuple[List[ItemRow], Dict[str, str]]:
         for row in reader:
             team = (row.get(cols["team"]) or "").strip()
             name = (row.get(cols["name"]) or "").strip()
-            silhouette = (row.get(cols["silhouette"]) or "").strip()
+            display_name = (row.get(cols["display_name"]) or "").strip()
             price = (row.get(cols["price"]) or "").strip()
 
             # Skip rows missing essential fields
             if not team or not name:
                 continue
 
-            items.append(ItemRow(team=team, name=name, silhouette=silhouette, price=price))
+            items.append(ItemRow(team=team, name=name, display_name=display_name, price=price))
 
     return items, cols
 
 
-def add_item_page(c: canvas.Canvas, image_path: Path, silhouette: str, price: str) -> None:
+def add_item_page(c: canvas.Canvas, image_path: Path, display_name: str, price: str) -> None:
     page_w, page_h = PAGE_SIZE
     # Content area
     epw = page_w - LEFT_MARGIN_PT - RIGHT_MARGIN_PT
@@ -187,7 +187,7 @@ def add_item_page(c: canvas.Canvas, image_path: Path, silhouette: str, price: st
     footer_bottom = BOTTOM_MARGIN_PT
     start_y = footer_bottom + (FOOTER_H_PT - 2 * line_h) / 2
     cx = page_w / 2.0
-    c.drawCentredString(cx, start_y + line_h, f"Silhouette: {silhouette or ''}")
+    c.drawCentredString(cx, start_y + line_h, f"Store Display Name: {display_name or ''}")
     c.drawCentredString(cx, start_y, f"Original Price: {price or ''}")
 
     c.showPage()
@@ -231,7 +231,7 @@ def generate_lookbooks(items: List[ItemRow]) -> None:
         c = canvas.Canvas(str(out_path), pagesize=PAGE_SIZE)
 
         for row, image_path in valid_rows:
-            add_item_page(c, image_path, row.silhouette, row.price)
+            add_item_page(c, image_path, row.display_name, row.price)
 
         c.save()
         added_pages = len(valid_rows)
