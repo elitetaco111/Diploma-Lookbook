@@ -11,6 +11,9 @@ from PIL import Image
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, landscape
 
+# TODO
+# Add style number
+# Potential for QR Code
 
 # Config
 CSV_FILE = Path("DRNItemDiplomaFramesResults241.csv")
@@ -24,7 +27,7 @@ TOP_MARGIN = 12
 BOTTOM_MARGIN = 12
 FOOTER_H = 16  # space reserved at bottom for text under the image
 FONT_NAME = "Helvetica"
-FONT_SIZE = 12
+FONT_SIZE = 18
 
 # Convert mm to points for ReportLab
 MM_TO_PT = 72.0 / 25.4
