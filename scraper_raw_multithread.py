@@ -7,7 +7,7 @@ import concurrent.futures
 
 # Constant variables
 TEAM_CODE = "diploma"
-CSV_FILE = 'DRNItemDiplomaFramesResults241.csv'
+CSV_FILE = 'DRNItemDiplomaFramesResults569.csv'
 FOLDER_NAME = f'{TEAM_CODE}_images'
 BASE_URL = 'https://media.rallyhouse.com/homepage/{}-1.jpg?tx=f_auto,c_fit,w_730,h_730'
 

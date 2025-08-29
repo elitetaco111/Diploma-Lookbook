@@ -16,7 +16,7 @@ from reportlab.lib.pagesizes import letter, landscape
 # Potential for QR Code
 
 # Config
-CSV_FILE = Path("DRNItemDiplomaFramesResults241.csv")
+CSV_FILE = Path("DRNItemDiplomaFramesResults569.csv")
 IMAGES_DIR = Path("diploma_images")
 OUTPUT_DIR = Path("lookbooks")
 
@@ -55,10 +55,8 @@ CANDIDATES = {
     "price": ["original price", "price", "msrp", "list price"],
 }
 
-
 def normalize(s: str) -> str:
     return re.sub(r"[\W_]+", " ", (s or "").strip().lower())
-
 
 def find_column(headers: List[str], keys: List[str], contains_all: Optional[List[str]] = None) -> Optional[str]:
     norm_headers = {normalize(h): h for h in headers}
