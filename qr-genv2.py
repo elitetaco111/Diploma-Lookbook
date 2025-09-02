@@ -1,6 +1,7 @@
 import csv
 import sys
 import re
+import json
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
@@ -54,6 +55,9 @@ def unique_path(directory: Path, base: str, ext: str) -> Path:
         n += 1
 
 
+# Where your redirector is hosted (change to your domain)
+BASE_REDIRECT = "https://your-domain.example"  # e.g., https://lookbook.example.com
+
 # UTM defaults (edit as needed)
 UTM_SOURCE = "qr"
 UTM_MEDIUM = "offline"
@@ -87,6 +91,13 @@ def main():
     out_dir = Path(__file__).with_name("qr-codes")
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # mappings.json will live under redirector/
+    redirector_dir = Path(__file__).parent / "redirector"
+    redirector_dir.mkdir(parents=True, exist_ok=True)
+    mappings_path = redirector_dir / "mappings.json"
+    mappings: dict[str, str] = {}
+    used_codes: set[str] = set()
+
     total = 0
     created = 0
     skipped = 0
@@ -116,7 +127,7 @@ def main():
                 skipped += 1
                 continue
 
-            # Build tracked URL with UTM parameters
+            # Destination with UTM parameters
             tracked_url = add_utm(url, {
                 "utm_source": UTM_SOURCE,
                 "utm_medium": UTM_MEDIUM,
@@ -124,19 +135,40 @@ def main():
                 "utm_content": slugify(display_name),
             })
 
+            # Create a stable code and ensure uniqueness in this run
+            base_code = slugify(display_name)
+            code = base_code or "item"
+            i = 2
+            while code in used_codes:
+                code = f"{base_code}-{i}"
+                i += 1
+            used_codes.add(code)
+            mappings[code] = tracked_url
+
             safe_base = sanitize_filename(display_name)
             out_path = unique_path(out_dir, safe_base, ".svg")
 
             try:
-                qr = segno.make(tracked_url)
+                # The QR encodes your redirect URL, not the final URL
+                qr_url = f"{BASE_REDIRECT}/r/{code}"
+                qr = segno.make(qr_url)
                 qr.save(out_path, border=2, scale=8)
                 created += 1
             except Exception as e:
                 print(f"Failed to create QR for '{display_name}': {e}")
                 skipped += 1
 
+    # Write mappings.json for the redirector
+    try:
+        with mappings_path.open("w", encoding="utf-8") as mf:
+            json.dump(mappings, mf, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Failed to write mappings.json: {e}")
+        sys.exit(1)
+
     print(f"Done. Rows: {total}, Created: {created}, Skipped: {skipped}")
-    print(f"Output folder: {out_dir.resolve()}")
+    print(f"QR output: {out_dir.resolve()}")
+    print(f"Mappings: {mappings_path.resolve()}")
 
 
 if __name__ == "__main__":
