@@ -25,7 +25,7 @@ LEFT_MARGIN = 15
 RIGHT_MARGIN = 15
 TOP_MARGIN = 12
 BOTTOM_MARGIN = 12
-FOOTER_H = 16  # space reserved at bottom for text under the image
+FOOTER_H = 24  # space reserved at bottom for text under the image (in mm), increased to fit 3 lines
 FONT_NAME = "Helvetica"
 FONT_SIZE = 18
 
@@ -113,6 +113,14 @@ def sanitize_filename(name: str) -> str:
     return name.rstrip(" .")[:150]
 
 
+def clean_display_name(s: str) -> str:
+    s = (s or "").strip()
+    cut = s.rfind(" -")
+    if cut != -1:
+        s = s[:cut].rstrip()
+    return s
+
+
 @dataclass
 class ItemRow:
     team: str
@@ -135,9 +143,9 @@ def load_rows(csv_path: Path) -> Tuple[List[ItemRow], Dict[str, str]]:
         for row in reader:
             team = (row.get(cols["team"]) or "").strip()
             name = (row.get(cols["name"]) or "").strip()
-            display_name = (row.get(cols["display_name"]) or "").strip()
+            display_name_raw = (row.get(cols["display_name"]) or "").strip()
+            display_name = clean_display_name(display_name_raw)
             price = (row.get(cols["price"]) or "").strip()
-
             # Skip rows missing essential fields
             if not team or not name:
                 continue
@@ -147,7 +155,7 @@ def load_rows(csv_path: Path) -> Tuple[List[ItemRow], Dict[str, str]]:
     return items, cols
 
 
-def add_item_page(c: canvas.Canvas, image_path: Path, display_name: str, price: str) -> None:
+def add_item_page(c: canvas.Canvas, image_path: Path, style_number: str, display_name: str, price: str) -> None:
     page_w, page_h = PAGE_SIZE
     # Content area
     epw = page_w - LEFT_MARGIN_PT - RIGHT_MARGIN_PT
@@ -179,17 +187,18 @@ def add_item_page(c: canvas.Canvas, image_path: Path, display_name: str, price: 
     except Exception as e:
         print(f"[WARN] Failed to embed image '{image_path.name}': {e}")
 
-    # Footer text (centered)
+    # Footer text (centered): Style Number, Display Name, Price
     c.setFont(FONT_NAME, FONT_SIZE)
     line_h = FONT_SIZE + 2
+    lines = 3
     footer_bottom = BOTTOM_MARGIN_PT
-    start_y = footer_bottom + (FOOTER_H_PT - 2 * line_h) / 2
+    start_y = footer_bottom + (FOOTER_H_PT - lines * line_h) / 2
     cx = page_w / 2.0
-    c.drawCentredString(cx, start_y + line_h, f"Store Display Name: {display_name or ''}")
-    c.drawCentredString(cx, start_y, f"Original Price: {price or ''}")
+    c.drawCentredString(cx, start_y + 2 * line_h, f"Style Number: {style_number or ''}")
+    c.drawCentredString(cx, start_y + line_h, f"{display_name or ''}")
+    c.drawCentredString(cx, start_y, f"Price: {price or ''}")
 
     c.showPage()
-
 
 def generate_lookbooks(items: List[ItemRow]) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -229,7 +238,7 @@ def generate_lookbooks(items: List[ItemRow]) -> None:
         c = canvas.Canvas(str(out_path), pagesize=PAGE_SIZE)
 
         for row, image_path in valid_rows:
-            add_item_page(c, image_path, row.display_name, row.price)
+            add_item_page(c, image_path, row.name, row.display_name, row.price)
 
         c.save()
         added_pages = len(valid_rows)
