@@ -1,14 +1,20 @@
 import csv
 import sys
 import re
-import json
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+from io import BytesIO
 
 try:
     import segno
 except ImportError:
     print("Missing dependency: segno. Install with: py -m pip install segno")
+    sys.exit(1)
+
+try:
+    from PIL import Image
+except ImportError:
+    print("Missing dependency: pillow. Install with: py -m pip install pillow")
     sys.exit(1)
 
 
@@ -55,9 +61,6 @@ def unique_path(directory: Path, base: str, ext: str) -> Path:
         n += 1
 
 
-# Where your redirector is hosted (change to your domain)
-BASE_REDIRECT = "https://your-domain.example"  # e.g., https://lookbook.example.com
-
 # UTM defaults (edit as needed)
 UTM_SOURCE = "qr"
 UTM_MEDIUM = "offline"
@@ -88,15 +91,10 @@ def main():
         print(f"CSV not found: {csv_path}")
         sys.exit(1)
 
-    out_dir = Path(__file__).with_name("qr-codes")
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # mappings.json will live under redirector/
-    redirector_dir = Path(__file__).parent / "redirector"
-    redirector_dir.mkdir(parents=True, exist_ok=True)
-    mappings_path = redirector_dir / "mappings.json"
-    mappings: dict[str, str] = {}
-    used_codes: set[str] = set()
+    svg_dir = Path(__file__).with_name("qr-codes-svg")
+    jpg_dir = Path(__file__).with_name("qr-codes-jpg")
+    svg_dir.mkdir(parents=True, exist_ok=True)
+    jpg_dir.mkdir(parents=True, exist_ok=True)
 
     total = 0
     created = 0
@@ -127,7 +125,7 @@ def main():
                 skipped += 1
                 continue
 
-            # Destination with UTM parameters
+            # Build tracked URL with UTM parameters
             tracked_url = add_utm(url, {
                 "utm_source": UTM_SOURCE,
                 "utm_medium": UTM_MEDIUM,
@@ -135,41 +133,41 @@ def main():
                 "utm_content": slugify(display_name),
             })
 
-            # Create a stable code and ensure uniqueness in this run
-            base_code = slugify(display_name)
-            code = base_code or "item"
-            i = 2
-            while code in used_codes:
-                code = f"{base_code}-{i}"
-                i += 1
-            used_codes.add(code)
-            mappings[code] = tracked_url
-
             safe_base = sanitize_filename(display_name)
-            out_path = unique_path(out_dir, safe_base, ".svg")
+            out_svg_path = unique_path(svg_dir, safe_base, ".svg")
+            out_jpg_path = unique_path(jpg_dir, safe_base, ".jpg")
 
             try:
-                # The QR encodes your redirect URL, not the final URL
-                qr_url = f"{BASE_REDIRECT}/r/{code}"
-                qr = segno.make(qr_url)
-                qr.save(out_path, border=2, scale=8)
+                qr = segno.make(tracked_url)
+
+                # Save SVG
+                qr.save(out_svg_path, border=2, scale=8)
+
+                # Rasterize to JPG (via in-memory PNG -> Pillow -> JPG)
+                buf = BytesIO()
+                qr.save(buf, kind="png", border=2, scale=8)
+                buf.seek(0)
+                img = Image.open(buf)
+
+                # Ensure opaque white background for JPG
+                if img.mode in ("RGBA", "LA"):
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    alpha = img.getchannel("A") if "A" in img.getbands() else img.split()[-1]
+                    bg.paste(img, mask=alpha)
+                    img = bg
+                else:
+                    img = img.convert("RGB")
+
+                img.save(out_jpg_path, "JPEG", quality=95, optimize=True)
+
                 created += 1
             except Exception as e:
                 print(f"Failed to create QR for '{display_name}': {e}")
                 skipped += 1
 
-    # Write mappings.json for the redirector
-    try:
-        with mappings_path.open("w", encoding="utf-8") as mf:
-            json.dump(mappings, mf, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Failed to write mappings.json: {e}")
-        sys.exit(1)
-
     print(f"Done. Rows: {total}, Created: {created}, Skipped: {skipped}")
-    print(f"QR output: {out_dir.resolve()}")
-    print(f"Mappings: {mappings_path.resolve()}")
-
+    print(f"SVG folder: {svg_dir.resolve()}")
+    print(f"JPG folder: {jpg_dir.resolve()}")
 
 if __name__ == "__main__":
     main()
