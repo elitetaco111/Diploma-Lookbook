@@ -20,13 +20,13 @@ except ImportError:
 
 # --- QR + Logo configuration ---
 ERROR_CORRECTION = "h"   # Use high error correction to tolerate center logo
-BORDER = 1               # Quiet zone modules (2–4 typical)
+BORDER = 4               # Quiet zone modules (2–4 typical)
 SCALE = 12                # Pixel scale per module (increase for higher resolution)
 
 # Logo configuration
 LOGO_PATH = Path(__file__).with_name("logo.png")  # Put your logo image here
 LOGO_SCALE = 0.4          # Logo width as fraction of QR width (0.15–0.25 recommended)
-LOGO_PAD = 0              # White box padding (pixels) around the logo in raster/JPG
+LOGO_PAD = 1              # White box padding (pixels) around the logo in raster/JPG
 # -------------------------------
 
 def find_column(fieldnames, target_name):
@@ -71,11 +71,10 @@ def unique_path(directory: Path, base: str, ext: str) -> Path:
             return cand
         n += 1
 
-
-# UTM defaults (edit as needed)
+# UTM vars
 UTM_SOURCE = "qr"
-UTM_MEDIUM = "offline"
-UTM_CAMPAIGN = "diploma_lookbook"
+UTM_MEDIUM = "direct"
+UTM_CAMPAIGN = "diploma_insert"
 
 def slugify(text: str) -> str:
     t = (text or "").lower().strip()
@@ -166,7 +165,7 @@ def embed_logo_in_svg(svg_path: Path, logo_path: Path, total_w: int, total_h: in
 
 def main():
     # CSV path: argument or default in project root
-    csv_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).with_name("DRNItemDiplomaFramesResults569.csv")
+    csv_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).with_name("diploma_qr_codes.csv")
     if not csv_path.exists():
         print(f"CSV not found: {csv_path}")
         sys.exit(1)
@@ -188,32 +187,35 @@ def main():
             sys.exit(1)
 
         url_col = find_column(reader.fieldnames, "URL Absolute")
-        name_col = find_column(reader.fieldnames, "Store Display Name")
+        file_name_col = find_column(reader.fieldnames, "Name")
+        display_col = find_column(reader.fieldnames, "Store Display Name")  # optional
 
-        if not url_col or not name_col:
+        if not url_col or not file_name_col:
             print("Required columns not found.")
             print(f"Found headers: {reader.fieldnames}")
-            print("Need: 'URL Absolute' and 'Store Display Name'")
+            print("Need: 'URL Absolute' and 'Name'")
             sys.exit(1)
 
         for row in reader:
             total += 1
             url = (row.get(url_col) or "").strip()
-            display_name = (row.get(name_col) or "").strip()
+            file_name = (row.get(file_name_col) or "").strip()
+            display_name = (row.get(display_col) or "").strip() if display_col else ""
 
-            if not url or not display_name:
+            if not url or not file_name:
                 skipped += 1
                 continue
 
             # Build tracked URL with UTM parameters
+            utm_content = slugify(display_name or file_name)
             tracked_url = add_utm(url, {
                 "utm_source": UTM_SOURCE,
                 "utm_medium": UTM_MEDIUM,
                 "utm_campaign": UTM_CAMPAIGN,
-                "utm_content": slugify(display_name),
+                "utm_content": utm_content,
             })
 
-            safe_base = sanitize_filename(display_name)
+            safe_base = sanitize_filename(file_name)
             out_svg_path = unique_path(svg_dir, safe_base, ".svg")
             out_jpg_path = unique_path(jpg_dir, safe_base, ".jpg")
 
@@ -250,7 +252,7 @@ def main():
 
                 created += 1
             except Exception as e:
-                print(f"Failed to create QR for '{display_name}': {e}")
+                print(f"Failed to create QR for '{file_name}': {e}")
                 skipped += 1
 
     print(f"Done. Rows: {total}, Created: {created}, Skipped: {skipped}")
